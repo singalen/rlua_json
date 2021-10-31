@@ -3,6 +3,7 @@ use rlua::{Context, FromLua, ToLua};
 use json::JsonValue;
 
 /// Because you cannot impl an external trait for an external struct.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct JsonWrapperValue {
     value: JsonValue,
 }
