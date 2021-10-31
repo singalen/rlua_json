@@ -94,27 +94,43 @@ impl<'lua> FromLua<'lua> for JsonWrapperValue {
 #[cfg(test)]
 mod tests {
     use json::JsonValue;
-    use rlua::{Lua, ToLua, Value};
+    use rlua::{Lua, ToLua, FromLua, Value};
     use crate::JsonWrapperValue;
 
     #[test]
-    fn it_works() {
+    fn object_string_values() {
 
-        let mut table = JsonValue::new_object();
-        table.insert("foo", "bar").expect("insert");
+        let mut source_table = JsonValue::new_object();
+        source_table.insert("foo", "bar")
+            .expect("insert");
 
-        let table = JsonWrapperValue::new(table);
+        let source_table = JsonWrapperValue::new(source_table);
 
         let lua = Lua::new();
-        lua.context(|lua_ctx| {
+        let resulting_table = lua.context(|lua_ctx| {
 
-            let rlua_table = table.to_lua(lua_ctx).expect("table");
-            match rlua_table {
-                Value::Table(t) =>
-                    assert_eq!(t.get::<_, String>("foo").expect("foo"), "bar"),
-                _ => panic!("Impossible"),
+            let rlua_table = source_table.to_lua(lua_ctx)
+                .expect("table");
+            match &rlua_table {
+                Value::Table(t) => {
+                    assert_eq!(t.get::<_, String>("foo")
+                                   .expect("foo"),
+                               "bar");
+                    t.set("from_lua", "string value")
+                        .expect("table.set() failed");
+                },
+                _ => panic!("table.to_lua() didn't return a Table"),
             }
-        });
+
+            JsonWrapperValue::from_lua(rlua_table, lua_ctx)
+                .map(|it| it.value)
+        }).expect("JsonWrapperValue::from_lua failed");
+
+        assert!(resulting_table.is_object());
+        assert!(resulting_table.has_key("from_lua"));
+        assert_eq!(resulting_table["from_lua"], "string value");
     }
+
+    // TODO: A lot more tests, including tests for error reporting on invalid data.
 }
 
