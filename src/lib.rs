@@ -1,11 +1,11 @@
 // use std::fmt::Display;
 use rlua;
 use rlua::{Context, FromLua, ToLua};
-use json::JsonValue;
-// use serde::{Deserialize, Serialize};
+use serde_json::{json, Value as JsonValue};
+use serde::{Deserialize, Serialize};
 
 /// Because you cannot impl an external trait for an external struct.
-#[derive(Debug, Clone, Eq, PartialEq)] // , Serialize, Deserialize
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct JsonWrapperValue {
     pub value: JsonValue,
 }
@@ -30,18 +30,17 @@ impl<'lua> ToLua<'lua> for JsonWrapperValue {
     fn to_lua(self, lua: Context<'lua>) -> rlua::Result<rlua::Value<'lua>> {
         let result = match self.value {
             JsonValue::Null => rlua::Value::Nil,
-            JsonValue::Short(s) => s.as_str().to_lua(lua)?,
             JsonValue::String(s) => s.as_str().to_lua(lua)?,
             JsonValue::Number(n) => (
-                (n.as_fixed_point_i64(2).ok_or_else(|| rlua::Error::ToLuaConversionError {
+                (n.as_f64().ok_or_else(|| rlua::Error::ToLuaConversionError {
                     from: "JsonValue::Number",
                     to: "Value::Number",
                     message: None
                 })? as f64) * 0.01
             ).to_lua(lua)?,
-            JsonValue::Boolean(b) => b.to_lua(lua)?,
+            JsonValue::Bool(b) => b.to_lua(lua)?,
             JsonValue::Object(o) => {
-                let iter = o.iter()
+                let iter = o.into_iter()
                     .map(|(k, v)| (k, JsonWrapperValue::new(v.clone())));
                 rlua::Value::Table(
                     lua.create_table_from(iter)?
@@ -64,7 +63,7 @@ impl<'lua> FromLua<'lua> for JsonWrapperValue {
     fn from_lua(lua_value: rlua::Value<'lua>, lua: Context<'lua>) -> rlua::Result<Self> {
         let result = match lua_value {
             rlua::Value::Nil => JsonValue::Null,
-            rlua::Value::Boolean(b) => JsonValue::Boolean(b),
+            rlua::Value::Boolean(b) => JsonValue::Bool(b),
             rlua::Value::LightUserData(_) => return Err(
                 rlua::Error::FromLuaConversionError {
                     from: "LightUserData", to: "JsonValue", message: Some("Impossible to convert".to_string()) }),
@@ -72,17 +71,15 @@ impl<'lua> FromLua<'lua> for JsonWrapperValue {
             rlua::Value::Number(n) => JsonValue::from(n),
             rlua::Value::String(s) => JsonValue::from(s.to_str()?),
             rlua::Value::Table(t) => {
-                let mut o = JsonValue::new_object();
+                let mut o = json!({});
                 for pair in t.pairs::<rlua::String, rlua::Value>() {
                     let (key, value) = pair?;
                     let key = key.to_str()?;
                     let value = JsonWrapperValue::from_lua(value, lua)?.value;
-                    o.insert(key, value)
-                        .map_err(|e| rlua::Error::ToLuaConversionError{
-                            from: "JsonObject",
-                            to: "insert",
-                            message: Some(format!("{}", e))
-                        })?;
+                    o
+                        .as_object_mut()
+                        .unwrap()
+                        .insert(key.to_string(), value);
                 }
                 o
             }
@@ -106,17 +103,14 @@ impl<'lua> FromLua<'lua> for JsonWrapperValue {
 
 #[cfg(test)]
 mod tests {
-    use json::JsonValue;
+    use serde_json::json;
     use rlua::{Lua, ToLua, FromLua, Value};
     use crate::JsonWrapperValue;
 
     #[test]
     fn object_string_values() {
 
-        let mut source_table = JsonValue::new_object();
-        source_table.insert("foo", "bar")
-            .expect("insert");
-
+        let source_table = json!({"foo": "bar"});
         let source_table = JsonWrapperValue::new(source_table);
 
         let lua = Lua::new();
@@ -140,8 +134,7 @@ mod tests {
         }).expect("JsonWrapperValue::from_lua failed");
 
         assert!(resulting_table.is_object());
-        assert!(resulting_table.has_key("from_lua"));
-        assert_eq!(resulting_table["from_lua"], "string value");
+        assert_eq!(resulting_table["from_lua"].as_str(), Some("string value"));
     }
 
     // TODO: A lot more tests, including tests for error reporting on invalid data.
