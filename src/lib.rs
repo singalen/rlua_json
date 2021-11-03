@@ -1,11 +1,13 @@
+// use std::fmt::Display;
 use rlua;
 use rlua::{Context, FromLua, ToLua};
 use json::JsonValue;
+// use serde::{Deserialize, Serialize};
 
 /// Because you cannot impl an external trait for an external struct.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)] // , Serialize, Deserialize
 pub struct JsonWrapperValue {
-    value: JsonValue,
+    pub value: JsonValue,
 }
 
 impl JsonWrapperValue {
@@ -13,6 +15,16 @@ impl JsonWrapperValue {
         JsonWrapperValue { value }
     }
 }
+
+// impl From<JsonValue> for JsonWrapperValue {
+//     fn from(val: JsonValue) -> Self {
+//         JsonWrapperValue::new(val)
+//     }
+// }
+//
+// impl Into<JsonValue> for JsonWrapperValue {
+//     fn into(self) -> JsonValue { self.value }
+// }
 
 impl<'lua> ToLua<'lua> for JsonWrapperValue {
     fn to_lua(self, lua: Context<'lua>) -> rlua::Result<rlua::Value<'lua>> {
