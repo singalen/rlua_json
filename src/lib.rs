@@ -14,6 +14,9 @@ impl JsonWrapperValue {
     pub fn new(value: JsonValue) -> Self {
         JsonWrapperValue { value }
     }
+    pub fn from(value: &JsonValue) -> Self {
+        JsonWrapperValue { value: value.clone() }
+    }
 }
 
 // impl From<JsonValue> for JsonWrapperValue {
