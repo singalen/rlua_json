@@ -1,4 +1,4 @@
-// use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use rlua;
 use rlua::{Context, FromLua, ToLua};
 use serde_json::{json, Value as JsonValue};
@@ -6,32 +6,37 @@ use serde::{Deserialize, Serialize};
 
 /// Because you cannot impl an external trait for an external struct.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct JsonWrapperValue {
-    pub value: JsonValue,
+pub struct JsonWrapperValue(JsonValue);
+
+impl Display for JsonWrapperValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 impl JsonWrapperValue {
     pub fn new(value: JsonValue) -> Self {
-        JsonWrapperValue { value }
+        JsonWrapperValue(value)
     }
+
     pub fn from(value: &JsonValue) -> Self {
-        JsonWrapperValue { value: value.clone() }
+        JsonWrapperValue(value.clone())
     }
 }
 
-// impl From<JsonValue> for JsonWrapperValue {
-//     fn from(val: JsonValue) -> Self {
-//         JsonWrapperValue::new(val)
-//     }
-// }
-//
-// impl Into<JsonValue> for JsonWrapperValue {
-//     fn into(self) -> JsonValue { self.value }
-// }
+impl From<JsonValue> for JsonWrapperValue {
+    fn from(val: JsonValue) -> Self {
+        JsonWrapperValue::new(val)
+    }
+}
+
+impl Into<JsonValue> for JsonWrapperValue {
+    fn into(self) -> JsonValue { self.0 }
+}
 
 impl<'lua> ToLua<'lua> for JsonWrapperValue {
     fn to_lua(self, lua: Context<'lua>) -> rlua::Result<rlua::Value<'lua>> {
-        let result = match self.value {
+        let result = match self.into() {
             JsonValue::Null => rlua::Value::Nil,
             JsonValue::String(s) => s.as_str().to_lua(lua)?,
             JsonValue::Number(n) => (
@@ -78,7 +83,7 @@ impl<'lua> FromLua<'lua> for JsonWrapperValue {
                 for pair in t.pairs::<rlua::String, rlua::Value>() {
                     let (key, value) = pair?;
                     let key = key.to_str()?;
-                    let value = JsonWrapperValue::from_lua(value, lua)?.value;
+                    let value = JsonWrapperValue::from_lua(value, lua)?.0;
                     o
                         .as_object_mut()
                         .unwrap()
@@ -100,7 +105,7 @@ impl<'lua> FromLua<'lua> for JsonWrapperValue {
                     from: "Error", to: "JsonValue", message: Some("Impossible to convert".to_string()) }),
         };
 
-        return Ok( JsonWrapperValue { value: result } )
+        return Ok( JsonWrapperValue(result) )
     }
 }
 
@@ -133,7 +138,7 @@ mod tests {
             }
 
             JsonWrapperValue::from_lua(rlua_table, lua_ctx)
-                .map(|it| it.value)
+                .map(|it| it.0)
         }).expect("JsonWrapperValue::from_lua failed");
 
         assert!(resulting_table.is_object());
