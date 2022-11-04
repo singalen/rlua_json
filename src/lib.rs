@@ -39,13 +39,20 @@ impl<'lua> ToLua<'lua> for JsonWrapperValue {
         let result = match self.into() {
             JsonValue::Null => rlua::Value::Nil,
             JsonValue::String(s) => s.as_str().to_lua(lua)?,
-            JsonValue::Number(n) => (
-                (n.as_f64().ok_or_else(|| rlua::Error::ToLuaConversionError {
-                    from: "JsonValue::Number",
-                    to: "Value::Number",
-                    message: None
-                })? as f64) * 0.01
-            ).to_lua(lua)?,
+            JsonValue::Number(n) => {
+
+                if let Some(ni) = n.as_i64() {
+                    return ni.to_lua(lua);
+                }
+
+                (
+                    n.as_f64().ok_or_else(|| rlua::Error::ToLuaConversionError {
+                        from: "JsonValue::Number",
+                        to: "Value::Number",
+                        message: None,
+                    })? as f64
+                ).to_lua(lua)?
+            },
             JsonValue::Bool(b) => b.to_lua(lua)?,
             JsonValue::Object(o) => {
                 let iter = o.into_iter()
