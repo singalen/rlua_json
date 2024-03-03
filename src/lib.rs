@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use rlua;
-use rlua::{Context, FromLua, ToLua};
+use rlua::{Lua, FromLua, ToLua};
 use serde_json::{json, Value as JsonValue};
 use serde::{Deserialize, Serialize};
 
@@ -35,14 +35,14 @@ impl Into<JsonValue> for JsonWrapperValue {
 }
 
 impl<'lua> ToLua<'lua> for JsonWrapperValue {
-    fn to_lua(self, lua: Context<'lua>) -> rlua::Result<rlua::Value<'lua>> {
+    fn into_lua(self, lua: &'lua Lua) -> rlua::Result<rlua::Value<'lua>> {
         let result = match self.into() {
             JsonValue::Null => rlua::Value::Nil,
-            JsonValue::String(s) => s.as_str().to_lua(lua)?,
+            JsonValue::String(s) => s.as_str().into_lua(lua)?,
             JsonValue::Number(n) => {
 
                 if let Some(ni) = n.as_i64() {
-                    return ni.to_lua(lua);
+                    return ni.into_lua(lua);
                 }
 
                 (
@@ -51,9 +51,9 @@ impl<'lua> ToLua<'lua> for JsonWrapperValue {
                         to: "Value::Number",
                         message: None,
                     })? as f64
-                ).to_lua(lua)?
+                ).into_lua(lua)?
             },
-            JsonValue::Bool(b) => b.to_lua(lua)?,
+            JsonValue::Bool(b) => b.into_lua(lua)?,
             JsonValue::Object(o) => {
                 let iter = o.into_iter()
                     .map(|(k, v)| (k, JsonWrapperValue::new(v.clone())));
@@ -75,7 +75,7 @@ impl<'lua> ToLua<'lua> for JsonWrapperValue {
 }
 
 impl<'lua> FromLua<'lua> for JsonWrapperValue {
-    fn from_lua(lua_value: rlua::Value<'lua>, lua: Context<'lua>) -> rlua::Result<Self> {
+    fn from_lua(lua_value: rlua::Value<'lua>, lua: &'lua Lua) -> rlua::Result<Self> {
         let result = match lua_value {
             rlua::Value::Nil => JsonValue::Null,
             rlua::Value::Boolean(b) => JsonValue::Bool(b),
