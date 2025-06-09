@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use rlua;
 use rlua::{Lua, FromLua, ToLua};
-use serde_json::{json, Value as JsonValue};
+use serde_json::{json, Value as JsonValue, Value};
 use serde::{Deserialize, Serialize};
 
 /// Because you cannot impl an external trait for an external struct.
@@ -21,6 +21,13 @@ impl JsonWrapperValue {
 
     pub fn from(value: &JsonValue) -> Self {
         JsonWrapperValue(value.clone())
+    }
+
+    pub fn into_map(self) -> serde_json::Map<String, serde_json::Value> {
+        match self.0 {
+            Value::Object(o) => o,
+            _ => panic!("Cannot convert non-object to map"),
+        }
     }
 }
 
