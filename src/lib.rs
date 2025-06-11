@@ -1,6 +1,8 @@
 use std::fmt::{Display, Formatter};
-use rlua;
-use rlua::{Lua, FromLua, ToLua};
+
+use mlua::{FromLua, IntoLua};
+// use rlua;
+// use mlua::{Lua, FromLua, ToLua};
 use serde_json::{json, Value as JsonValue, Value};
 use serde::{Deserialize, Serialize};
 
@@ -41,10 +43,10 @@ impl Into<JsonValue> for JsonWrapperValue {
     fn into(self) -> JsonValue { self.0 }
 }
 
-impl<'lua> ToLua<'lua> for JsonWrapperValue {
-    fn into_lua(self, lua: &'lua Lua) -> rlua::Result<rlua::Value<'lua>> {
+impl<'lua> IntoLua for JsonWrapperValue {
+    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         let result = match self.into() {
-            JsonValue::Null => rlua::Value::Nil,
+            JsonValue::Null => mlua::Value::Nil,
             JsonValue::String(s) => s.as_str().into_lua(lua)?,
             JsonValue::Number(n) => {
 
@@ -53,8 +55,8 @@ impl<'lua> ToLua<'lua> for JsonWrapperValue {
                 }
 
                 (
-                    n.as_f64().ok_or_else(|| rlua::Error::ToLuaConversionError {
-                        from: "JsonValue::Number",
+                    n.as_f64().ok_or_else(|| mlua::Error::ToLuaConversionError {
+                        from: "JsonValue::Number".to_string(),
                         to: "Value::Number",
                         message: None,
                     })? as f64
@@ -64,14 +66,14 @@ impl<'lua> ToLua<'lua> for JsonWrapperValue {
             JsonValue::Object(o) => {
                 let iter = o.into_iter()
                     .map(|(k, v)| (k, JsonWrapperValue::new(v.clone())));
-                rlua::Value::Table(
+                mlua::Value::Table(
                     lua.create_table_from(iter)?
                 )
             },
             JsonValue::Array(a) => {
                 let iter = a.into_iter()
                     .map(|it| JsonWrapperValue::new(it));
-                rlua::Value::Table(
+                mlua::Value::Table(
                     lua.create_table_from(iter.enumerate())?
                 )
             },
@@ -81,20 +83,20 @@ impl<'lua> ToLua<'lua> for JsonWrapperValue {
     }
 }
 
-impl<'lua> FromLua<'lua> for JsonWrapperValue {
-    fn from_lua(lua_value: rlua::Value<'lua>, lua: &'lua Lua) -> rlua::Result<Self> {
+impl FromLua for JsonWrapperValue {
+    fn from_lua(lua_value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
         let result = match lua_value {
-            rlua::Value::Nil => JsonValue::Null,
-            rlua::Value::Boolean(b) => JsonValue::Bool(b),
-            rlua::Value::LightUserData(_) => return Err(
-                rlua::Error::FromLuaConversionError {
-                    from: "LightUserData", to: "JsonValue", message: Some("Impossible to convert".to_string()) }),
-            rlua::Value::Integer(i) => JsonValue::from(i),
-            rlua::Value::Number(n) => JsonValue::from(n),
-            rlua::Value::String(s) => JsonValue::from(s.to_str()?),
-            rlua::Value::Table(t) => {
+            mlua::Value::Nil => JsonValue::Null,
+            mlua::Value::Boolean(b) => JsonValue::Bool(b),
+            mlua::Value::LightUserData(_) => return Err(
+                mlua::Error::FromLuaConversionError {
+                    from: "LightUserData", to: "JsonValue".to_string(), message: Some("Impossible to convert".to_string()) }),
+            mlua::Value::Integer(i) => JsonValue::from(i),
+            mlua::Value::Number(n) => JsonValue::from(n),
+            mlua::Value::String(s) => JsonValue::from(s.to_str()?.as_ref()),
+            mlua::Value::Table(t) => {
                 let mut o = json!({});
-                for pair in t.pairs::<rlua::String, rlua::Value>() {
+                for pair in t.pairs::<mlua::String, mlua::Value>() {
                     let (key, value) = pair?;
                     let key = key.to_str()?;
                     let value = JsonWrapperValue::from_lua(value, lua)?.0;
@@ -105,18 +107,21 @@ impl<'lua> FromLua<'lua> for JsonWrapperValue {
                 }
                 o
             }
-            rlua::Value::Function(_) => return Err(
-                rlua::Error::FromLuaConversionError {
-                    from: "Function", to: "JsonValue", message: Some("Impossible to convert".to_string()) }),
-            rlua::Value::Thread(_) => return Err(
-                rlua::Error::FromLuaConversionError {
-                    from: "Thread", to: "JsonValue", message: Some("Impossible to convert".to_string()) }),
-            rlua::Value::UserData(_) => return Err(
-                rlua::Error::FromLuaConversionError {
-                    from: "UserData", to: "JsonValue", message: Some("Impossible to convert".to_string()) }),
-            rlua::Value::Error(_) => return Err(
-                rlua::Error::FromLuaConversionError {
-                    from: "Error", to: "JsonValue", message: Some("Impossible to convert".to_string()) }),
+            mlua::Value::Function(_) => return Err(
+                mlua::Error::FromLuaConversionError {
+                    from: "Function", to: "JsonValue".to_string(), message: Some("Impossible to convert".to_string()) }),
+            mlua::Value::Thread(_) => return Err(
+                mlua::Error::FromLuaConversionError {
+                    from: "Thread", to: "JsonValue".to_string(), message: Some("Impossible to convert".to_string()) }),
+            mlua::Value::UserData(_) => return Err(
+                mlua::Error::FromLuaConversionError {
+                    from: "UserData", to: "JsonValue".to_string(), message: Some("Impossible to convert".to_string()) }),
+            mlua::Value::Error(_) => return Err(
+                mlua::Error::FromLuaConversionError {
+                    from: "Error", to: "JsonValue".to_string(), message: Some("Impossible to convert".to_string()) }),
+            mlua::Value::Other(_) => return Err(
+                mlua::Error::FromLuaConversionError {
+                    from: "Other", to: "JsonValue".to_string(), message: Some("Impossible to convert".to_string()) }),
         };
 
         return Ok( JsonWrapperValue(result) )
@@ -126,7 +131,7 @@ impl<'lua> FromLua<'lua> for JsonWrapperValue {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use rlua::{Lua, ToLua, FromLua, Value};
+    use mlua::{Lua, IntoLua, FromLua, Value};
     use crate::JsonWrapperValue;
 
     #[test]
@@ -141,7 +146,7 @@ mod tests {
             .expect("table");
         match &rlua_table {
             Value::Table(t) => {
-                assert_eq!(t.get::<_, String>("foo")
+                assert_eq!(t.get::<String>("foo".to_string())
                                .expect("foo"),
                            "bar");
                 t.set("from_lua", "string value")
